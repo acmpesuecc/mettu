@@ -1,0 +1,7 @@
+site_name: "site"
+author: "you"
+navigation:
+  - name: "Home"
+    url: "/index.html"
+  - name: "Blog"
+    url: "/blog.html"
