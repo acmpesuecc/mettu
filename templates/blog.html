@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>{{ page.title }}</h1>
+    <p>{{ content | safe }}</p>
+    <div class="divider"></div>
+
+    <div class="space-y-8 mt-8">
+    {% for post in posts %}
+        <div class="card bg-base-200 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title"><a href="{{ post.url }}">{{ post.title }}</a></h2>
+                <p>Published on: {{ post.date }}</p>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+{% endblock %}
