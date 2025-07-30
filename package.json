@@ -1,0 +1,21 @@
+{
+  "name": "mettu",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "python src/main.py && vite",
+    "build": "python src/main.py && vite build"
+  },
+  "keywords": [],
+  "author": "Andey Hemanth",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "@tailwindcss/vite": "^4.1.11",
+    "daisyui": "^5.0.50",
+    "glob": "^11.0.3",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.11",
+    "vite": "^7.0.6"
+  }
+}
