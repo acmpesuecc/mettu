@@ -1,6 +1,6 @@
 # mettu - a Static Site Generator using Python and Vite
 
-mettu (మెట్లు, /ˈmɛt.t̪u/) is a simple static site generator that uses Python for backend processing and Vite for frontend development. It allows you to create static websites using markdown files.
+mettu (మెట్లు, /ˈmɛt.t̪u/) is a simple static site generator that uses Python for backend processing and Vite for frontend development, with Tailwind and DaisyUI for styling. It allows you to create static websites using markdown files.
 
 ## Why the name?
 "mettu" is a Telugu word meaning a stair or step. It felt like a great name given that this project is a step towards building tools myself, and convieniently, a step towards making a site!
