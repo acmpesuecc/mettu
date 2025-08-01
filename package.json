@@ -1,6 +1,6 @@
 {
   "name": "mettu",
-  "version": "0.1.2",
+  "version": "0.2.0",
 "scripts": {
   "dev": "vite",
   "build": "python src/main.py && vite build"

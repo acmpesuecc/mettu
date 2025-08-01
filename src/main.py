@@ -4,6 +4,7 @@ import markdown
 from jinja2 import Environment, FileSystemLoader
 from datetime import datetime
 import argparse
+import shutil
 
 TEMPLATE_DIR = "templates"
 CONFIG_FILE = "config.yaml"
@@ -12,6 +13,15 @@ IMAGES_DIR = "assets/images"
 CONTENT_DIR = "content"
 POSTS_DIR = "content/posts"
 
+def clean_output(directory):
+    print("Cleaning old build files...")
+    for filename in os.listdir(directory):
+        if filename.endswith('.html'):
+            os.remove(os.path.join(directory, filename))
+    
+    posts_dir_path = os.path.join(directory, 'posts')
+    if os.path.exists(posts_dir_path):
+        shutil.rmtree(posts_dir_path)
 
 def parse_file(filepath):
     with open(filepath, 'r') as f:
@@ -31,11 +41,6 @@ def parse_file(filepath):
 
     if page_config is None:
         page_config = {}
-
-    # html_data = markdown.markdown(markdown_data)
-    # parts = file_content.split("---",2)
-    # page_config = yaml.safe_load(parts[1])
-    # markdown_data = parts[2]
 
     html_data = markdown.markdown(markdown_data)
     output_filename = os.path.splitext(os.path.basename(filepath))[0] + '.html'
@@ -70,8 +75,14 @@ def render_page(page_config, html_data, site_config, templates, all_posts=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--file')
+    parser.add_argument('--clean', action='store_true')
     args = parser.parse_args()
 
+    if args.clean:
+        clean_output(OUTPUT_DIR)
+        print("generated files are deleted.")
+        return
+    
     with open(CONFIG_FILE, 'r') as f:
         site_config = yaml.safe_load(f)
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
@@ -98,6 +109,8 @@ def main():
         print("Running a full build...")
         all_posts = []
         pages = []
+
+        clean_output(OUTPUT_DIR)
 
         for filename in os.listdir(CONTENT_DIR):
             if filename.endswith('.md'):
