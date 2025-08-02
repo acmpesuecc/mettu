@@ -4,6 +4,12 @@
     <article>
         <h1 class="text-3xl font-bold">{{ page.title }}</h1>
         <p class="text-sm text-gray-500 my-2">Published on: {{ page.date }}</p>
+        <div class="my-4">
+            <strong>Tags:</strong>
+                {% for tag in page.tags %}
+                    <a href="/tags/{{ tag }}.html" class="btn btn-xs">{{ tag }}</a>
+                {% endfor %}
+        </div>
         <div class="divider"></div>
         {{ content | safe }}
     </article>

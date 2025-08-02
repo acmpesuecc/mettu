@@ -20,8 +20,11 @@ def clean_output(directory):
             os.remove(os.path.join(directory, filename))
     
     posts_dir_path = os.path.join(directory, 'posts')
+    tags_dir_path = os.path.join(directory, 'tags')
     if os.path.exists(posts_dir_path):
         shutil.rmtree(posts_dir_path)
+    if os.path.exists(tags_dir_path):
+        shutil.rmtree(tags_dir_path)
 
 def parse_file(filepath):
     with open(filepath, 'r') as f:
@@ -47,6 +50,23 @@ def parse_file(filepath):
     page_config['url'] = f'/{output_filename}'
 
     return page_config, html_data
+
+def tag_pages(tag_template, site_config, tags ={}):
+    tags_dir = os.path.join(OUTPUT_DIR, 'tags')
+    os.makedirs(tags_dir, exist_ok=True)
+
+    for tag_name, posts_with_tag in tags.items():
+            posts_with_tag.sort(key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d'), reverse=True)
+            tag_page_html = tag_template.render(
+                site=site_config,
+                tag_name=tag_name,
+                posts=posts_with_tag,
+                page={'title': f'Tag: {tag_name}'}
+            )
+            output_path = os.path.join(tags_dir, f'{tag_name}.html')
+            with open(output_path, 'w') as f:
+                f.write(tag_page_html)
+            print(f"Generated tag page: tags/{tag_name}.html")
 
 def render_page(page_config, html_data, site_config, templates, all_posts=None):
     layout = page_config.get('layout')
@@ -89,7 +109,8 @@ def main():
     templates = {
         "main": env.get_template('main.html'),
         "blog": env.get_template('blog.html'),
-        "post": env.get_template('post.html')
+        "post": env.get_template('post.html'),
+        "tags": env.get_template('tags.html')
     }
 
     if args.file:
@@ -109,6 +130,7 @@ def main():
         print("Running a full build...")
         all_posts = []
         pages = []
+        tags = {}
 
         clean_output(OUTPUT_DIR)
 
@@ -130,10 +152,17 @@ def main():
                     pages.append({'data': page_data, 'content': html_content})
                     if page_data.get('layout') == 'post':
                         all_posts.append(page_data)
+                        for tag in page_data.get('tags'):
+                            if tag not in tags:
+                                tags[tag]= []
+                            tags[tag].append(page_data)
         
         all_posts.sort(key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d'), reverse=True)
         for page in pages:
             render_page(page['data'], page['content'], site_config, templates, all_posts)
+
+        tag_pages(templates['tags'], site_config, tags)
+
 
 if __name__ == "__main__":
     main()

@@ -1,9 +1,9 @@
 {
   "name": "mettu",
-  "version": "0.2.2",
+  "version": "0.3.0",
 "scripts": {
   "dev": "vite",
-  "build": "python src/main.py && vite build"
+  "build": "vite build"
 },
   "keywords": [],
   "author": "Andey Hemanth",
