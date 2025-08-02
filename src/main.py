@@ -93,7 +93,7 @@ def main():
     }
 
     if args.file:
-        print(f"rebuilding {args.file}...")
+        print(f"Change detected in {args.file}, proceeding to rebuild...")
         
         page_data, html_content = parse_file(args.file)
         output_filename = os.path.splitext(os.path.basename(args.file))[0] + '.html'

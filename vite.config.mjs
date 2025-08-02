@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
-import { exec, execSync } from 'child_process'; 
+import { execSync } from 'child_process'; 
 import os from 'os';
 
 const pythonexecutable = `${os.homedir()}/virtenv/pullgit/bin/python`;
@@ -28,17 +28,15 @@ const py_build_plugin = () => {
           ? `${pythonexecutable} src/main.py --file ${file}`
           : `${pythonexecutable} src/main.py`;
 
-        exec(command, (err, stdout, stderr) => {
-          if (err) {
-            console.error("Script failed to update: ", stderr);
-            return;
-          }
-          console.log(stdout.trim());
-          setTimeout(() => {
-            server.ws.send({ type: 'full-reload', path: "*" });
-          }, 100);
+        try {
+          const output = execSync(command);
+          console.log(output.toString().trim());
+              
+          server.ws.send({ type: 'full-reload', path: "*" });
           ready = true;
-        });
+        } catch (e) {
+          console.error("Script failed to update: ", e);
+        }
       };
 
       build();
