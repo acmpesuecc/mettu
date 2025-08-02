@@ -6,7 +6,7 @@ import os from 'os';
 const pythonexecutable = `${os.homedir()}/virtenv/pullgit/bin/python`;
 
 const py_build_plugin = () => {
-
+  let ready = false;
   const handleExit = () => {
     console.log('\nCleaning up build files...');
     try {
@@ -37,20 +37,29 @@ const py_build_plugin = () => {
           setTimeout(() => {
             server.ws.send({ type: 'full-reload', path: "*" });
           }, 100);
+          ready = true;
         });
       };
 
       build();
 
-      server.watcher.on('change', (file) => {
-        if (file.includes('/content/') || file.includes('/templates/')) {
-          const buildTarget = file.includes('/templates/') ? null : file;
-          build(buildTarget);
+      server.watcher.on('all', (event, path) => {
+        if (!ready) {
+          return;
+        }
+
+        if (path.includes('/content/') || path.includes('/templates/') || path.includes('/assets/css/')) {
+          if (event === 'change') {
+            const buildTarget = path.includes('/templates/') ? null : path;
+            build(buildTarget);
+          } else if (event === 'add' || event === 'unlink') {
+            build();
+          }
+        }
+        if (event === 'unlink') { // if html files are deleted
+          build();
         }
       });
-
-      server.watcher.on('add', () => build());
-      server.watcher.on('unlink', () => build());
     },
   };
 };
