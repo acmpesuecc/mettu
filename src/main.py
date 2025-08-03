@@ -128,6 +128,7 @@ def main():
 
     else:
         print("Running a full build...")
+        sitemap_list = []
         all_posts = []
         pages = []
         tags = {}
@@ -167,6 +168,14 @@ def main():
 
         tag_pages(templates['tags'], site_config, tags)
 
+        sitemap_template = env.get_template('sitemap.xml.j2')
+        sitemap_xml = sitemap_template.render(
+            site=site_config,
+            pages=sitemap_list
+        )
+        with open(os.path.join(OUTPUT_DIR, 'sitemap.xml'), 'w') as f:
+            f.write(sitemap_xml)
+        print("Generated sitemap.xml")
 
 if __name__ == "__main__":
     main()
