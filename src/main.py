@@ -138,6 +138,8 @@ def main():
             if filename.endswith('.md'):
                 filepath = os.path.join(CONTENT_DIR, filename)
                 page_data, html_content = parse_file(filepath)
+                if page_data['draft'] and page_data['draft'] == "true":
+                    continue
                 pages.append({'data': page_data, 'content': html_content})
 
         if os.path.exists(POSTS_DIR):
@@ -145,6 +147,8 @@ def main():
                 if filename.endswith('.md'):
                     filepath = os.path.join(POSTS_DIR, filename)
                     page_data, html_content = parse_file(filepath)
+                    if page_data['draft'] and page_data['draft'] == "true":
+                        continue
 
                     output_filename = os.path.splitext(filename)[0] + '.html'
                     page_data['url'] = f'/posts/{output_filename}'
