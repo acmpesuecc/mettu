@@ -2,3 +2,4 @@ markdown
 yaml
 jinja2
 shutil
+Pygments

@@ -16,7 +16,7 @@ POSTS_DIR = "content/posts"
 def clean_output(directory):
     print("Cleaning old build files...")
     for filename in os.listdir(directory):
-        if filename.endswith('.html'):
+        if filename.endswith('.html') or filename.endswith('.xml'):
             os.remove(os.path.join(directory, filename))
     
     posts_dir_path = os.path.join(directory, 'posts')
@@ -45,7 +45,8 @@ def parse_file(filepath):
     if page_config is None:
         page_config = {}
 
-    html_data = markdown.markdown(markdown_data)
+    extensions = ['fenced_code', 'codehilite', 'footnotes']
+    html_data = markdown.markdown(markdown_data, extensions=extensions)
     output_filename = os.path.splitext(os.path.basename(filepath))[0] + '.html'
     page_config['url'] = f'/{output_filename}'
 
@@ -139,7 +140,7 @@ def main():
             if filename.endswith('.md'):
                 filepath = os.path.join(CONTENT_DIR, filename)
                 page_data, html_content = parse_file(filepath)
-                if page_data['draft'] and page_data['draft'] == "true":
+                if page_data.get('draft') == True:
                     continue
                 pages.append({'data': page_data, 'content': html_content})
 
@@ -148,7 +149,7 @@ def main():
                 if filename.endswith('.md'):
                     filepath = os.path.join(POSTS_DIR, filename)
                     page_data, html_content = parse_file(filepath)
-                    if page_data['draft'] and page_data['draft'] == "true":
+                    if page_data.get('draft') == True == "true":
                         continue
 
                     output_filename = os.path.splitext(filename)[0] + '.html'

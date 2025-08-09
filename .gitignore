@@ -2,3 +2,7 @@ package-lock.json
 /node_modules
 /node_modules/*
 /assets/images/*
+
+.env
+
+/assets/css/syntax.css
