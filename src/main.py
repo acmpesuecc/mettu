@@ -1,10 +1,12 @@
 import os
 import yaml
 import markdown
+from markdown.extensions.toc import TocExtension
 from jinja2 import Environment, FileSystemLoader
 from datetime import datetime
 import argparse
 import shutil
+import hashlib
 
 TEMPLATE_DIR = "templates"
 CONFIG_FILE = "config.yaml"
@@ -15,27 +17,52 @@ POSTS_DIR = "content/posts"
 
 def clean_output(directory):
     print("Cleaning old build files...")
-    for filename in os.listdir(directory):
-        if filename.endswith('.html') or filename.endswith('.xml'):
-            os.remove(os.path.join(directory, filename))
-    
+    for root, dirs, files in os.walk(directory):
+        for filename in files:
+            if filename == 'index.html' or filename.endswith('.xml'):
+                file_path = os.path.join(root, filename)
+                os.remove(file_path)
+                print(f"Deleted: {file_path}")
+
     posts_dir_path = os.path.join(directory, 'posts')
     tags_dir_path = os.path.join(directory, 'tags')
     if os.path.exists(posts_dir_path):
         shutil.rmtree(posts_dir_path)
+        print(f"Deleted directory: {posts_dir_path}")
     if os.path.exists(tags_dir_path):
         shutil.rmtree(tags_dir_path)
+        print(f"Deleted directory: {tags_dir_path}")
+
+def has_file_changed(filepath, cache_dir=".cache"):
+    os.makedirs(cache_dir, exist_ok=True)
+    file_hash = hashlib.md5(open(filepath, 'rb').read()).hexdigest()
+    cache_file = os.path.join(cache_dir, os.path.basename(filepath) + '.hash')
+
+    if os.path.exists(cache_file):
+        with open(cache_file, 'r') as f:
+            cached_hash = f.read().strip()
+        if cached_hash == file_hash:
+            return False
+
+    with open(cache_file, 'w') as f:
+        f.write(file_hash)
+    return True
 
 def parse_file(filepath):
-    with open(filepath, 'r') as f:
-        file_content = f.read()
-    
+    try:
+        with open(filepath, 'r') as f:
+            file_content = f.read()
+    except FileNotFoundError:
+        print(f"Error: File not found - {filepath}")
+        return None, None
+
     if file_content.startswith('---'):
         try:
             parts = file_content.split("---", 2)
             page_config = yaml.safe_load(parts[1])
             markdown_data = parts[2]
-        except (IndexError, yaml.YAMLError):
+        except (IndexError, yaml.YAMLError) as e:
+            print(f"Error parsing YAML frontmatter in {filepath}: {e}")
             page_config = {}
             markdown_data = file_content
     else:
@@ -45,10 +72,16 @@ def parse_file(filepath):
     if page_config is None:
         page_config = {}
 
-    extensions = ['fenced_code', 'codehilite', 'footnotes']
+    extensions = ['fenced_code', 'codehilite', 'footnotes', TocExtension(permalink=True)]
     html_data = markdown.markdown(markdown_data, extensions=extensions)
-    output_filename = os.path.splitext(os.path.basename(filepath))[0] + '.html'
-    page_config['url'] = f'/{output_filename}'
+
+    slug = os.path.splitext(os.path.basename(filepath))[0]
+    if os.path.normpath(filepath).startswith(os.path.normpath(POSTS_DIR)):
+        page_config['url'] = f'/posts/{slug}'
+    elif slug == 'index':
+        page_config['url'] = '/'
+    else:
+        page_config['url'] = f'/{slug}'
 
     return page_config, html_data
 
@@ -72,9 +105,9 @@ def tag_pages(tag_template, site_config, tags ={}):
 def render_page(page_config, html_data, site_config, templates, all_posts=None):
     layout = page_config.get('layout')
     if layout not in templates:
-        print("template not found. Skipped build.")
+        print("Error: Template not found. Skipping build.")
         return
-    
+
     template = templates[layout]
 
     render_details = {
@@ -84,14 +117,18 @@ def render_page(page_config, html_data, site_config, templates, all_posts=None):
     }
     if layout == 'blog' and all_posts is not None:
         render_details['posts'] = all_posts
-    final_html = template.render(render_details)
-    output_path = os.path.join(OUTPUT_DIR, page_config['url'].lstrip('/'))
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+    final_html = template.render(render_details)
+
+    if page_config['url'] == '/':
+        output_path = os.path.join(OUTPUT_DIR, 'index.html')
+    else:
+        output_path = os.path.join(OUTPUT_DIR, page_config['url'].lstrip('/'), 'index.html')
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, 'w') as f:
         f.write(final_html)
-    print(f"Generated: {os.path.basename(output_path)}")
-
+    print(f"Generated: {page_config['url'] if page_config['url'] != '/' else '/index.html'}")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -116,14 +153,13 @@ def main():
 
     if args.file:
         print(f"Change detected in {args.file}, proceeding to rebuild...")
-        
-        page_data, html_content = parse_file(args.file)
-        output_filename = os.path.splitext(os.path.basename(args.file))[0] + '.html'
+        if not has_file_changed(args.file):
+            print(f"No changes detected in {args.file}. Skipping rebuild.")
+            return
 
-        if 'posts' in args.file:
-            page_data['url'] = f'/posts/{output_filename}'
-        else:
-            page_data['url'] = f'/{output_filename}'
+        page_data, html_content = parse_file(args.file)
+        if page_data is None or html_content is None:
+            return
 
         render_page(page_data, html_content, site_config, templates)
 
@@ -139,6 +175,10 @@ def main():
         for filename in os.listdir(CONTENT_DIR):
             if filename.endswith('.md'):
                 filepath = os.path.join(CONTENT_DIR, filename)
+                if not has_file_changed(filepath):
+                    print(f"No changes detected in {filepath}. Skipping.")
+                    continue
+
                 page_data, html_content = parse_file(filepath)
                 if page_data.get('draft') == True:
                     continue
@@ -148,21 +188,22 @@ def main():
             for filename in os.listdir(POSTS_DIR):
                 if filename.endswith('.md'):
                     filepath = os.path.join(POSTS_DIR, filename)
+                    if not has_file_changed(filepath):
+                        print(f"No changes detected in {filepath}. Skipping.")
+                        continue
+
                     page_data, html_content = parse_file(filepath)
                     if page_data.get('draft') == True == "true":
                         continue
 
-                    output_filename = os.path.splitext(filename)[0] + '.html'
-                    page_data['url'] = f'/posts/{output_filename}'
-
                     pages.append({'data': page_data, 'content': html_content})
                     if page_data.get('layout') == 'post':
                         all_posts.append(page_data)
-                        for tag in page_data.get('tags'):
+                        for tag in page_data.get('tags') or []:
                             if tag not in tags:
-                                tags[tag]= []
+                                tags[tag] = []
                             tags[tag].append(page_data)
-        
+
         all_posts.sort(key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d'), reverse=True)
         for page in pages:
             render_page(page['data'], page['content'], site_config, templates, all_posts)
