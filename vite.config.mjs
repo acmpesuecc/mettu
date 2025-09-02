@@ -13,8 +13,8 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const inputDir = path.join(__dirname, '../assets/images');
-const outputDir = path.join(__dirname, '../assets/images-processed');
+const inputDir = path.join(__dirname, '/assets/images');
+const outputDir = path.join(__dirname, '/assets/images-processed');
 
 processImages(inputDir, outputDir).catch(e =>
   console.error('[images] initial processing failed', e)

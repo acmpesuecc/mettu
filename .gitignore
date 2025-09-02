@@ -7,3 +7,4 @@ package-lock.json
 
 /assets/css/syntax.css
 .cache
+/assets/preprocessed_images/*
