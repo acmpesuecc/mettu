@@ -1,11 +1,24 @@
 import { defineConfig } from "vite";
 import dotenv from 'dotenv';
 import tailwindcss from "@tailwindcss/vite";
-import { execSync } from 'child_process'; 
+import { execSync } from 'child_process';
 import os from 'os';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { processImages } from './src/image-preprocess.mjs';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const inputDir = path.join(__dirname, '../assets/images');
+const outputDir = path.join(__dirname, '../assets/images-processed');
+
+processImages(inputDir, outputDir).catch(e =>
+  console.error('[images] initial processing failed', e)
+);
 
 const pythonexecutable = process.env.PY_EXECUTABLE;
 
@@ -48,7 +61,7 @@ const py_build_plugin = () => {
         try {
           const output = execSync(command);
           console.log(output.toString().trim());
-              
+
           server.ws.send({ type: 'full-reload', path: "*" });
           ready = true;
         } catch (e) {
@@ -71,7 +84,7 @@ const py_build_plugin = () => {
             build();
           }
         }
-        if ( event === 'change' && path.includes('/assets/css/')){
+        if (event === 'change' && path.includes('/assets/css/')) {
           build();
         }
         if (event === 'unlink') { // if html files are deleted
