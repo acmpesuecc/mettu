@@ -7,6 +7,7 @@ from datetime import datetime
 import argparse
 import shutil
 import hashlib
+import json
 
 TEMPLATE_DIR = "templates"
 CONFIG_FILE = "config.yaml"
@@ -14,6 +15,20 @@ OUTPUT_DIR = "."
 IMAGES_DIR = "assets/images"
 CONTENT_DIR = "content"
 POSTS_DIR = "content/posts"
+
+PAGE_SLUG_CACHE = ".cache/page-slugs.json"
+
+def load_previous_slugs():
+    try:
+        with open(PAGE_SLUG_CACHE, "r") as f:
+            return set(json.load(f))
+    except:
+        return set()
+
+def save_current_slugs(slugs):
+    os.makedirs(os.path.dirname(PAGE_SLUG_CACHE), exist_ok=True)
+    with open(PAGE_SLUG_CACHE, "w") as f:
+        json.dump(sorted(slugs), f)
 
 def clean_output(directory):
     print("Cleaning old build files...")
@@ -35,8 +50,10 @@ def clean_output(directory):
 
 def has_file_changed(filepath, cache_dir=".cache"):
     os.makedirs(cache_dir, exist_ok=True)
+    rel = os.path.relpath(filepath)
     file_hash = hashlib.md5(open(filepath, 'rb').read()).hexdigest()
-    cache_file = os.path.join(cache_dir, os.path.basename(filepath) + '.hash')
+    safe_name = rel.replace(os.sep, '__') + '.hash'
+    cache_file = os.path.join(cache_dir, safe_name)
 
     if os.path.exists(cache_file):
         with open(cache_file, 'r') as f:
@@ -138,9 +155,11 @@ def main():
 
     if args.clean:
         clean_output(OUTPUT_DIR)
+        if os.path.exists(PAGE_SLUG_CACHE):
+            os.remove(PAGE_SLUG_CACHE)
         print("generated files are deleted.")
         return
-    
+
     with open(CONFIG_FILE, 'r') as f:
         site_config = yaml.safe_load(f)
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
@@ -153,6 +172,19 @@ def main():
 
     if args.file:
         print(f"Change detected in {args.file}, proceeding to rebuild...")
+        if not os.path.exists(args.file):
+
+            slug = os.path.splitext(os.path.basename(args.file))[0]
+            if slug != 'index':
+                out_dir = os.path.join(OUTPUT_DIR, slug)
+                if os.path.isdir(out_dir):
+                    shutil.rmtree(out_dir)
+                    print(f"Removed deleted page output: {out_dir}")
+            
+            if os.path.exists(PAGE_SLUG_CACHE):
+                os.remove(PAGE_SLUG_CACHE)
+            return
+
         if not has_file_changed(args.file):
             print(f"No changes detected in {args.file}. Skipping rebuild.")
             return
@@ -160,9 +192,7 @@ def main():
         page_data, html_content = parse_file(args.file)
         if page_data is None or html_content is None:
             return
-
         render_page(page_data, html_content, site_config, templates)
-
     else:
         print("Running a full build...")
         sitemap_list = []
@@ -172,15 +202,19 @@ def main():
 
         clean_output(OUTPUT_DIR)
 
+        current_slugs = set()
+        previous_slugs = load_previous_slugs()
+
         for filename in os.listdir(CONTENT_DIR):
             if filename.endswith('.md'):
                 filepath = os.path.join(CONTENT_DIR, filename)
-                if not has_file_changed(filepath):
-                    print(f"No changes detected in {filepath}. Skipping.")
-                    continue
-
                 page_data, html_content = parse_file(filepath)
                 if page_data.get('draft') == True:
+                    continue
+                slug = os.path.splitext(filename)[0]
+                current_slugs.add(slug)
+                if not has_file_changed(filepath):
+                    pages.append({'data': page_data, 'content': html_content})
                     continue
                 pages.append({'data': page_data, 'content': html_content})
 
@@ -188,21 +222,33 @@ def main():
             for filename in os.listdir(POSTS_DIR):
                 if filename.endswith('.md'):
                     filepath = os.path.join(POSTS_DIR, filename)
-                    if not has_file_changed(filepath):
-                        print(f"No changes detected in {filepath}. Skipping.")
-                        continue
-
                     page_data, html_content = parse_file(filepath)
                     if page_data.get('draft') == True == "true":
                         continue
-
-                    pages.append({'data': page_data, 'content': html_content})
+                    slug = os.path.splitext(filename)[0]
+                    current_slugs.add(f"posts/{slug}")
+                    if not has_file_changed(filepath):
+                        pages.append({'data': page_data, 'content': html_content})
+                    else:
+                        pages.append({'data': page_data, 'content': html_content})
                     if page_data.get('layout') == 'post':
                         all_posts.append(page_data)
                         for tag in page_data.get('tags') or []:
-                            if tag not in tags:
-                                tags[tag] = []
-                            tags[tag].append(page_data)
+                            tags.setdefault(tag, []).append(page_data)
+
+        removed = previous_slugs - current_slugs
+        for slug in removed:
+            
+            if slug.startswith('posts/'):
+                continue
+            if slug == 'index':
+                continue
+            out_dir = os.path.join(OUTPUT_DIR, slug)
+            if os.path.isdir(out_dir):
+                shutil.rmtree(out_dir)
+                print(f"Removed stale page directory: {out_dir}")
+
+        save_current_slugs(current_slugs)
 
         all_posts.sort(key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d'), reverse=True)
         for page in pages:
