@@ -8,6 +8,7 @@ import argparse
 import shutil
 import hashlib
 import json
+import re
 
 TEMPLATE_DIR = "templates"
 CONFIG_FILE = "config.yaml"
@@ -17,6 +18,7 @@ CONTENT_DIR = "content"
 POSTS_DIR = "content/posts"
 
 PAGE_SLUG_CACHE = ".cache/page-slugs.json"
+IMAGE_MANIFEST_PATH = ".cache/image-manifest.json"
 
 def load_previous_slugs():
     try:
@@ -89,6 +91,7 @@ def parse_file(filepath):
     if page_config is None:
         page_config = {}
 
+    markdown_data = replace_md_images(markdown_data)
     extensions = ['fenced_code', 'codehilite', 'footnotes', TocExtension(permalink=True)]
     html_data = markdown.markdown(markdown_data, extensions=extensions)
 
@@ -146,6 +149,42 @@ def render_page(page_config, html_data, site_config, templates, all_posts=None):
     with open(output_path, 'w') as f:
         f.write(final_html)
     print(f"Generated: {page_config['url'] if page_config['url'] != '/' else '/index.html'}")
+
+def load_image_manifest():
+    try:
+        with open(IMAGE_MANIFEST_PATH, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+IMAGE_MANIFEST = load_image_manifest()
+IMAGE_TAG_RE = re.compile(r'!\[(?P<alt>[^\]]*)\]\((?P<src>assets/images/[^)]+)\)')
+
+def replace_md_images(md_text):
+    def repl(m):
+        alt = m.group('alt')
+        src = m.group('src')
+        fname = src.split('/')[-1]
+        variants = IMAGE_MANIFEST.get(fname)
+        if not variants:
+            return f'![{alt}]({src})'
+        # webp > avif > jpg 
+        primary = (variants.get('webp') or variants.get('avif') or variants.get('jpg'))[0]
+        sources_html = []
+        order = ['avif','webp','jpg']
+        for fmt in order:
+            if fmt in variants:
+                srcset = ", ".join(f"{v['path']} {v['width']}w" for v in variants[fmt])
+                sources_html.append(
+                    f'<source type="image/{("jpeg" if fmt=="jpg" else fmt)}" srcset="{srcset}" sizes="100vw">'
+                )
+        fallback_path = primary['path']
+        return (
+          f'<picture>{"".join(sources_html)}'
+          f'<img src="{fallback_path}" alt="{alt}" loading="lazy" decoding="async" />'
+          f'</picture>'
+        )
+    return IMAGE_TAG_RE.sub(repl, md_text)
 
 def main():
     parser = argparse.ArgumentParser()

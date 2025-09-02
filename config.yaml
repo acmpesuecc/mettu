@@ -3,6 +3,6 @@ author: "you"
 base_url: "you.com"
 navigation:
   - name: "Home"
-    url: "/index.html"
+    url: "/"
   - name: "Blog"
-    url: "/blog.html"
+    url: "/blog/"
