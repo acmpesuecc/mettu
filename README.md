@@ -18,7 +18,7 @@ mettu (మెట్లు, /ˈmɛt.t̪u/) is a simple static site generator that
    pip install -r requirements.txt
    npm install -D vite tailwindcss daisyui @tailwindcss/vite postcss glob 
    ```
-3. Create a `.env` file in the root directory and set the environment variables "PY_EXECUTABLE" and "DAISYUI_THEME".
+3. Create a `.env` file in the root directory and set the environment variables "PY_EXECUTABLE" and "PYGMENTIZE_THEME".
 4. Edit the `config.yaml` file to set your site name, author, and navigation links.
 5. Create markdown files in the `content` directory. Each file should start similarly to the given examples.
 6. Templates and svg icons are located in the `templates` directory. You can customize them as needed.

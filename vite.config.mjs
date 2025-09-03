@@ -30,7 +30,7 @@ const py_build_plugin = () => {
   if (!fs.existsSync(syntaxCssPath)) {
     console.log('Syntax CSS not found. Generating...');
     try {
-      execSync(`pygmentize -S ${process.env.DAISYUI_THEME} -f html > ${syntaxCssPath}`);
+      execSync(`pygmentize -S ${process.env.PYGMENTIZE_THEME} -f html > ${syntaxCssPath}`);
       console.log('Generated syntax.css');
     } catch (e) {
       console.error('Failed to generate syntax.css. Make sure "pygmentize" is installed and in your PATH.', e);
