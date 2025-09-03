@@ -67,9 +67,34 @@ def has_file_changed(filepath, cache_dir=".cache"):
         f.write(file_hash)
     return True
 
+MARKDOWN_EXTENSIONS = [
+    "fenced_code",
+    "codehilite",
+    "footnotes",
+    "tables",
+    "attr_list",
+    "sane_lists",
+    "md_in_html",
+    TocExtension(permalink=True)
+]
+
+MARKDOWN_EXTENSION_CONFIGS = {
+    "codehilite": {
+        "guess_lang": False,
+        "noclasses": False,   # produce CSS classes (preferable with a pygments CSS)
+        "pygments_style": "native"
+    },
+}
+
+def build_markdown():
+    return markdown.Markdown(
+        extensions=MARKDOWN_EXTENSIONS,
+        extension_configs=MARKDOWN_EXTENSION_CONFIGS
+    )
+
 def parse_file(filepath):
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             file_content = f.read()
     except FileNotFoundError:
         print(f"Error: File not found - {filepath}")
@@ -78,7 +103,7 @@ def parse_file(filepath):
     if file_content.startswith('---'):
         try:
             parts = file_content.split("---", 2)
-            page_config = yaml.safe_load(parts[1])
+            page_config = yaml.safe_load(parts[1]) or {}
             markdown_data = parts[2]
         except (IndexError, yaml.YAMLError) as e:
             print(f"Error parsing YAML frontmatter in {filepath}: {e}")
@@ -88,20 +113,33 @@ def parse_file(filepath):
         page_config = {}
         markdown_data = file_content
 
-    if page_config is None:
-        page_config = {}
-
+    # Image substitution before markdown conversion
     markdown_data = replace_md_images(markdown_data)
-    extensions = ['fenced_code', 'codehilite', 'footnotes', TocExtension(permalink=True)]
-    html_data = markdown.markdown(markdown_data, extensions=extensions)
+
+    md = build_markdown()
+    html_data = md.convert(markdown_data)
+    md.reset()
 
     slug = os.path.splitext(os.path.basename(filepath))[0]
-    if os.path.normpath(filepath).startswith(os.path.normpath(POSTS_DIR)):
+    rel_posts = os.path.normpath(POSTS_DIR)
+    if os.path.normpath(filepath).startswith(rel_posts):
         page_config['url'] = f'/posts/{slug}'
     elif slug == 'index':
         page_config['url'] = '/'
     else:
         page_config['url'] = f'/{slug}'
+
+    # Normalize date to YYYY-MM-DD string if provided
+    if 'date' in page_config and page_config['date']:
+        if isinstance(page_config['date'], datetime):
+            page_config['date'] = page_config['date'].strftime('%Y-%m-%d')
+        else:
+            # Try parse loose formats
+            try:
+                parsed = datetime.fromisoformat(str(page_config['date']))
+                page_config['date'] = parsed.strftime('%Y-%m-%d')
+            except Exception:
+                pass
 
     return page_config, html_data
 
@@ -248,28 +286,28 @@ def main():
             if filename.endswith('.md'):
                 filepath = os.path.join(CONTENT_DIR, filename)
                 page_data, html_content = parse_file(filepath)
-                if page_data.get('draft') == True:
+                if not page_data:
+                    continue
+                if str(page_data.get('draft')).lower() in ('true', '1', 'yes'):
                     continue
                 slug = os.path.splitext(filename)[0]
                 current_slugs.add(slug)
-                if not has_file_changed(filepath):
-                    pages.append({'data': page_data, 'content': html_content})
-                    continue
                 pages.append({'data': page_data, 'content': html_content})
+                sitemap_list.append(page_data['url'])
 
         if os.path.exists(POSTS_DIR):
             for filename in os.listdir(POSTS_DIR):
                 if filename.endswith('.md'):
                     filepath = os.path.join(POSTS_DIR, filename)
                     page_data, html_content = parse_file(filepath)
-                    if page_data.get('draft') == True == "true":
+                    if not page_data:
+                        continue
+                    if str(page_data.get('draft')).lower() in ('true', '1', 'yes'):
                         continue
                     slug = os.path.splitext(filename)[0]
                     current_slugs.add(f"posts/{slug}")
-                    if not has_file_changed(filepath):
-                        pages.append({'data': page_data, 'content': html_content})
-                    else:
-                        pages.append({'data': page_data, 'content': html_content})
+                    pages.append({'data': page_data, 'content': html_content})
+                    sitemap_list.append(page_data['url'])
                     if page_data.get('layout') == 'post':
                         all_posts.append(page_data)
                         for tag in page_data.get('tags') or []:
@@ -289,7 +327,7 @@ def main():
 
         save_current_slugs(current_slugs)
 
-        all_posts.sort(key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d'), reverse=True)
+        all_posts.sort(key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d') if x.get('date') else datetime.min, reverse=True)
         for page in pages:
             render_page(page['data'], page['content'], site_config, templates, all_posts)
 

@@ -1,6 +1,6 @@
 {
   "name": "mettu",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build"
@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.16",
     "@tailwindcss/vite": "^4.1.11",
     "daisyui": "^5.0.50",
     "dotenv": "^17.2.1",
