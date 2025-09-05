@@ -9,7 +9,11 @@ import shutil
 import hashlib
 import json
 import re
+import dotenv
 
+dotenv.load_dotenv()
+
+PYGMENTIZE_THEME = os.getenv('PYGMENTIZE_THEME', 'native')
 TEMPLATE_DIR = "templates"
 CONFIG_FILE = "config.yaml"
 OUTPUT_DIR = "."
@@ -81,8 +85,8 @@ MARKDOWN_EXTENSIONS = [
 MARKDOWN_EXTENSION_CONFIGS = {
     "codehilite": {
         "guess_lang": False,
-        "noclasses": False,   # produce CSS classes (preferable with a pygments CSS)
-        "pygments_style": "native"
+        "noclasses": False,
+        "pygments_style": PYGMENTIZE_THEME,
     },
 }
 
