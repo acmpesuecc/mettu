@@ -1,5 +1,4 @@
 markdown
-yaml
+pyyaml
 jinja2
-shutil
 Pygments

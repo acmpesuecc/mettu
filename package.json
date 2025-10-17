@@ -11,8 +11,8 @@
   "description": "",
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",
-    "@tailwindcss/vite": "^4.1.11",
-    "daisyui": "^5.0.50",
+    "@tailwindcss/vite": "^4.1.14",
+    "daisyui": "^5.3.7",
     "dotenv": "^17.2.1",
     "fast-glob": "^3.3.3",
     "glob": "^11.0.3",
@@ -21,7 +21,7 @@
     "markdown-it-toc-done-right": "^4.2.0",
     "postcss": "^8.5.6",
     "sharp": "^0.34.3",
-    "tailwindcss": "^4.1.11",
-    "vite": "^7.0.6"
+    "tailwindcss": "^4.1.14",
+    "vite": "^7.1.10"
   }
 }
