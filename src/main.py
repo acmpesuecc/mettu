@@ -1,220 +1,32 @@
-import os
-import yaml
-import markdown
-from markdown.extensions.toc import TocExtension
-from jinja2 import Environment, FileSystemLoader
-from datetime import datetime
 import argparse
+import jinja2
+import os
 import shutil
-import hashlib
-import json
-import re
-import dotenv
-
-dotenv.load_dotenv()
-
-PYGMENTIZE_THEME = os.getenv("PYGMENTIZE_THEME", "native")
-TEMPLATE_DIR = "templates"
-CONFIG_FILE = "config.yaml"
-OUTPUT_DIR = "."
-IMAGES_DIR = "assets/images"
-CONTENT_DIR = "content"
-POSTS_DIR = "content/posts"
-
-PAGE_SLUG_CACHE = ".cache/page-slugs.json"
-
-
-def load_previous_slugs():
-    try:
-        with open(PAGE_SLUG_CACHE, "r") as f:
-            return set(json.load(f))
-    except:
-        return set()
-
-
-def save_current_slugs(slugs):
-    os.makedirs(os.path.dirname(PAGE_SLUG_CACHE), exist_ok=True)
-    with open(PAGE_SLUG_CACHE, "w") as f:
-        json.dump(sorted(slugs), f)
-
-
-def clean_output(directory):
-    print("Cleaning old build files...")
-    for root, dirs, files in os.walk(directory):
-        for filename in files:
-            if filename == "index.html" or filename.endswith(".xml"):
-                file_path = os.path.join(root, filename)
-                os.remove(file_path)
-                print(f"Deleted: {file_path}")
-
-    posts_dir_path = os.path.join(directory, "posts")
-    tags_dir_path = os.path.join(directory, "tags")
-    if os.path.exists(posts_dir_path):
-        shutil.rmtree(posts_dir_path)
-        print(f"Deleted directory: {posts_dir_path}")
-    if os.path.exists(tags_dir_path):
-        shutil.rmtree(tags_dir_path)
-        print(f"Deleted directory: {tags_dir_path}")
-
-
-def has_file_changed(filepath, cache_dir=".cache"):
-    os.makedirs(cache_dir, exist_ok=True)
-    rel = os.path.relpath(filepath)
-    file_hash = hashlib.md5(open(filepath, "rb").read()).hexdigest()
-    safe_name = rel.replace(os.sep, "__") + ".hash"
-    cache_file = os.path.join(cache_dir, safe_name)
-
-    if os.path.exists(cache_file):
-        with open(cache_file, "r") as f:
-            cached_hash = f.read().strip()
-        if cached_hash == file_hash:
-            return False
-
-    with open(cache_file, "w") as f:
-        f.write(file_hash)
-    return True
-
-
-MARKDOWN_EXTENSIONS = [
-    "fenced_code",
-    "codehilite",
-    "footnotes",
-    "tables",
-    "attr_list",
-    "sane_lists",
-    "md_in_html",
-    TocExtension(permalink=True),
-]
-
-MARKDOWN_EXTENSION_CONFIGS = {
-    "codehilite": {
-        "guess_lang": False,
-        "noclasses": False,
-        "pygments_style": PYGMENTIZE_THEME,
-    },
-}
-
-
-def build_markdown():
-    return markdown.Markdown(
-        extensions=MARKDOWN_EXTENSIONS, extension_configs=MARKDOWN_EXTENSION_CONFIGS
-    )
-
-
-def parse_file(filepath):
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            file_content = f.read()
-    except FileNotFoundError:
-        print(f"Error: File not found - {filepath}")
-        return None, None
-
-    if file_content.startswith("---"):
-        try:
-            parts = file_content.split("---", 2)
-            page_config = yaml.safe_load(parts[1]) or {}
-            markdown_data = parts[2]
-        except (IndexError, yaml.YAMLError) as e:
-            print(f"Error parsing YAML frontmatter in {filepath}: {e}")
-            page_config = {}
-            markdown_data = file_content
-    else:
-        page_config = {}
-        markdown_data = file_content
-
-    md = build_markdown()
-    html_data = md.convert(markdown_data)
-    md.reset()
-
-    slug = os.path.splitext(os.path.basename(filepath))[0]
-    rel_posts = os.path.normpath(POSTS_DIR)
-    if os.path.normpath(filepath).startswith(rel_posts):
-        page_config["url"] = f"/posts/{slug}"
-    elif slug == "index":
-        page_config["url"] = "/"
-    else:
-        page_config["url"] = f"/{slug}"
-
-    # Normalize date to YYYY-MM-DD string
-    if "date" in page_config and page_config["date"]:
-        if isinstance(page_config["date"], datetime):
-            page_config["date"] = page_config["date"].strftime("%Y-%m-%d")
-        else:
-            try:
-                parsed = datetime.fromisoformat(str(page_config["date"]))
-                page_config["date"] = parsed.strftime("%Y-%m-%d")
-            except Exception:
-                pass
-
-    return page_config, html_data
-
-
-def tag_pages(tag_template, site_config, tags={}):
-    tags_dir = os.path.join(OUTPUT_DIR, "tags")
-    os.makedirs(tags_dir, exist_ok=True)
-
-    for tag_name, posts_with_tag in tags.items():
-        posts_with_tag.sort(
-            key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"), reverse=True
-        )
-        tag_page_html = tag_template.render(
-            site=site_config,
-            tag_name=tag_name,
-            posts=posts_with_tag,
-            page={"title": f"Tag: {tag_name}"},
-        )
-        output_path = os.path.join(tags_dir, f"{tag_name}.html")
-        with open(output_path, "w") as f:
-            f.write(tag_page_html)
-        print(f"Generated tag page: tags/{tag_name}.html")
-
-
-def render_page(page_config, html_data, site_config, templates, all_posts=None):
-    layout = page_config.get("layout")
-    if layout not in templates:
-        print("Error: Template not found. Skipping build.")
-        return
-
-    template = templates[layout]
-
-    render_details = {"site": site_config, "page": page_config, "content": html_data}
-    if layout == "blog" and all_posts is not None:
-        render_details["posts"] = all_posts
-
-    final_html = template.render(render_details)
-
-    if page_config["url"] == "/":
-        output_path = os.path.join(OUTPUT_DIR, "index.html")
-    else:
-        output_path = os.path.join(
-            OUTPUT_DIR, page_config["url"].lstrip("/"), "index.html"
-        )
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
-        f.write(final_html)
-    print(
-        f"Generated: {page_config['url'] if page_config['url'] != '/' else '/index.html'}"
-    )
-
+from config import loaf_config
+from file_utils import clean_output, has_file_changed, load_previous_slugs, save_current_slugs
+from parse import parse_file
+from tempelate import render_page
+from tags import tag_pages
+from datetime import datetime
+from slug import load_previous_slugs, save_current_slugs
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file")
-    parser.add_argument("--clean", action="store_true")
+    parser.add_argument("--file", help="Rebuild a specific file if changed.")
+    parser.add_argument("--clean", action="store_true", help="Clean the output directory.")
     args = parser.parse_args()
 
     if args.clean:
-        clean_output(OUTPUT_DIR)
-        if os.path.exists(PAGE_SLUG_CACHE):
-            os.remove(PAGE_SLUG_CACHE)
-        print("generated files are deleted.")
+        clean_output(os.getenv("OUTPUT_DIR", "."))
+        if os.path.exists(os.getenv("PAGE_SLUG_CACHE", ".cache/page-slugs.json")):
+            os.remove(os.getenv("PAGE_SLUG_CACHE", ".cache/page-slugs.json"))
+        print("Generated files are deleted.")
         return
 
-    with open(CONFIG_FILE, "r") as f:
-        site_config = yaml.safe_load(f)
-    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    site_config = loaf_config()
+    
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.getenv("TEMPLATE_DIR", "templates")))
     templates = {
         "main": env.get_template("main.html"),
         "blog": env.get_template("blog.html"),
@@ -225,16 +37,15 @@ def main():
     if args.file:
         print(f"Change detected in {args.file}, proceeding to rebuild...")
         if not os.path.exists(args.file):
-
             slug = os.path.splitext(os.path.basename(args.file))[0]
             if slug != "index":
-                out_dir = os.path.join(OUTPUT_DIR, slug)
+                out_dir = os.path.join(os.getenv("OUTPUT_DIR", "."), slug)
                 if os.path.isdir(out_dir):
                     shutil.rmtree(out_dir)
                     print(f"Removed deleted page output: {out_dir}")
 
-            if os.path.exists(PAGE_SLUG_CACHE):
-                os.remove(PAGE_SLUG_CACHE)
+            if os.path.exists(os.getenv("PAGE_SLUG_CACHE", ".cache/page-slugs.json")):
+                os.remove(os.getenv("PAGE_SLUG_CACHE", ".cache/page-slugs.json"))
             return
 
         if not has_file_changed(args.file):
@@ -247,19 +58,23 @@ def main():
         render_page(page_data, html_content, site_config, templates)
     else:
         print("Running a full build...")
+
+
         sitemap_list = []
         all_posts = []
         pages = []
         tags = {}
 
-        clean_output(OUTPUT_DIR)
+        clean_output(os.getenv("OUTPUT_DIR", "."))
+
 
         current_slugs = set()
         previous_slugs = load_previous_slugs()
 
-        for filename in os.listdir(CONTENT_DIR):
+
+        for filename in os.listdir(os.getenv("CONTENT_DIR", "content")):
             if filename.endswith(".md"):
-                filepath = os.path.join(CONTENT_DIR, filename)
+                filepath = os.path.join(os.getenv("CONTENT_DIR", "content"), filename)
                 page_data, html_content = parse_file(filepath)
                 if not page_data:
                     continue
@@ -270,14 +85,15 @@ def main():
                 pages.append({"data": page_data, "content": html_content})
                 sitemap_list.append(page_data["url"])
 
-        if os.path.exists(POSTS_DIR):
-            for filename in os.listdir(POSTS_DIR):
+
+        if os.path.exists(os.getenv("POSTS_DIR", "content/posts")):
+            for filename in os.listdir(os.getenv("POSTS_DIR", "content/posts")):
                 if filename.endswith(".md"):
-                    filepath = os.path.join(POSTS_DIR, filename)
+                    filepath = os.path.join(os.getenv("POSTS_DIR", "content/posts"), filename)
                     page_data, html_content = parse_file(filepath)
                     if not page_data:
                         continue
-                    if str(page_data.get("draft")).lower() in ("true", "1", "yes"):
+                    if str(page_data.get("draft")).lower() in ("true", "1", "yes"):  # Skip drafts
                         continue
                     slug = os.path.splitext(filename)[0]
                     current_slugs.add(f"posts/{slug}")
@@ -288,17 +104,18 @@ def main():
                         for tag in page_data.get("tags") or []:
                             tags.setdefault(tag, []).append(page_data)
 
+
         removed = previous_slugs - current_slugs
         for slug in removed:
-
             if slug.startswith("posts/"):
                 continue
             if slug == "index":
                 continue
-            out_dir = os.path.join(OUTPUT_DIR, slug)
+            out_dir = os.path.join(os.getenv("OUTPUT_DIR", "."), slug)
             if os.path.isdir(out_dir):
                 shutil.rmtree(out_dir)
                 print(f"Removed stale page directory: {out_dir}")
+
 
         save_current_slugs(current_slugs)
 
@@ -310,19 +127,17 @@ def main():
             ),
             reverse=True,
         )
+
         for page in pages:
-            render_page(
-                page["data"], page["content"], site_config, templates, all_posts
-            )
+            render_page(page["data"], page["content"], site_config, templates, all_posts)
 
         tag_pages(templates["tags"], site_config, tags)
 
         sitemap_template = env.get_template("sitemap.xml.j2")
         sitemap_xml = sitemap_template.render(site=site_config, pages=sitemap_list)
-        with open(os.path.join(OUTPUT_DIR, "sitemap.xml"), "w") as f:
+        with open(os.path.join(os.getenv("OUTPUT_DIR", "."), "sitemap.xml"), "w") as f:
             f.write(sitemap_xml)
         print("Generated sitemap.xml")
-
 
 if __name__ == "__main__":
     main()
