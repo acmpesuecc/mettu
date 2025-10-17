@@ -56,6 +56,10 @@ def clean_output(directory):
         shutil.rmtree(tags_dir_path)
         print(f"Deleted directory: {tags_dir_path}")
 
+css_path = os.path.join("assets", "css", "styles.css")
+if os.path.exists(css_path):
+    os.remove(css_path)
+    print(f"Deleted: {css_path}")
 
 def has_file_changed(filepath, cache_dir=".cache"):
     os.makedirs(cache_dir, exist_ok=True)
