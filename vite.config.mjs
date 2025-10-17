@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import dotenv from 'dotenv';
 import tailwindcss from "@tailwindcss/vite";
 import { execSync } from 'child_process';
-import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,15 +12,14 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const inputDir = path.join(__dirname, '/assets/images');
-const outputDir = path.join(__dirname, '/assets/images-processed');
+const inputDir = path.join(__dirname, '/assets/images-processed');
 
-processImages(inputDir, outputDir).catch(e =>
+// Run image preprocessing once on startup
+processImages(inputDir).catch(e =>
   console.error('[images] initial processing failed', e)
 );
 
-const pythonexecutable = process.env.PY_EXECUTABLE;
-
+const pythonexecutable = process.env.PY_EXECUTABLE || 'python';
 
 const py_build_plugin = () => {
   let ready = false;
@@ -89,6 +87,16 @@ const py_build_plugin = () => {
         }
         if (event === 'unlink') { // if html files are deleted
           build();
+        }
+        
+        // Watch for new images and process them
+        if (path.includes('/assets/images-processed/') && (event === 'add' || event === 'change')) {
+          if (/\.(png|jpe?g|gif)$/i.test(path)) {
+            console.log('[images] New/changed image detected, processing...');
+            processImages(inputDir).catch(e =>
+              console.error('[images] processing failed', e)
+            );
+          }
         }
       });
     },
