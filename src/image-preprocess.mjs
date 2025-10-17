@@ -3,65 +3,82 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 
+// Configuration: Pick one resolution and format
+const TARGET_WIDTH = 1280; // Single resolution for all images
+const TARGET_FORMAT = 'webp'; // Modern format with good compression
+const QUALITY = 75; // Balance between quality and file size
 
-const TARGET_WIDTHS = [320, 640, 960, 1280, 1920];
-const FORMATS = [
-    { ext: 'webp', to: img => img.webp({ quality: 70 }) },
-    { ext: 'avif', to: img => img.avif({ quality: 45 }) },
-    { ext: 'jpg', to: img => img.jpeg({ quality: 80, mozjpeg: true, progressive: true }) },
-];
-
-
+/**
+ * Process images by converting them to a single optimized format/resolution
+ * and overwriting the originals in the input directory
+ */
 export async function processImages(inputDir, outputDir) {
-    await fs.mkdir(outputDir, { recursive: true });
-    const entries = await fs.readdir(inputDir, { withFileTypes: true });
+    // We'll ignore outputDir and work directly in inputDir to overwrite originals
+    const actualDir = inputDir;
+    
+    const entries = await fs.readdir(actualDir, { withFileTypes: true });
     const files = entries
         .filter(e => e.isFile() && /\.(png|jpe?g|gif)$/i.test(e.name))
         .map(e => e.name);
 
-    const manifest = {}; // { originalFile: { format: [{ width, path }] } }
+    if (files.length === 0) {
+        console.log('[img] No images to process');
+        return;
+    }
+
+    console.log(`[img] Processing ${files.length} images...`);
+    let processed = 0;
+    let skipped = 0;
 
     for (const file of files) {
-        const inputPath = path.join(inputDir, file);   // FIX
-        let meta;
-        try {
-            meta = await sharp(inputPath).metadata();
-        } catch (e) {
-            console.error(`[img] metadata fail ${file}: ${e.message}`);
+        const inputPath = path.join(actualDir, file);
+        const baseName = file.replace(/\.(png|jpe?g|gif)$/i, '');
+        const outputFile = `${baseName}.${TARGET_FORMAT}`;
+        const outputPath = path.join(actualDir, outputFile);
+
+        // Skip if already processed (same name with target format)
+        if (file.toLowerCase().endsWith(`.${TARGET_FORMAT}`)) {
+            console.log(`[img] ⏭️  Skipping ${file} (already ${TARGET_FORMAT})`);
+            skipped++;
             continue;
         }
 
-        const origWidth = meta.width || Math.max(...TARGET_WIDTHS);
-        const widths = [...new Set(
-            TARGET_WIDTHS.filter(w => w <= origWidth).concat([origWidth])
-        )].sort((a, b) => a - b);
+        try {
+            const meta = await sharp(inputPath).metadata();
+            const origWidth = meta.width || TARGET_WIDTH;
 
-        const baseName = file.replace(/\.(png|jpe?g|gif)$/i, '');
-        for (const w of widths) {
-            for (const fmt of FORMATS) {
-                const outFile = `${baseName}-${w}.${fmt.ext}`;
-                const outPath = path.join(outputDir, outFile);
-                try {
-                    await fmt.to(sharp(inputPath).resize({ width: w })).toFile(outPath);
-                    console.log(`[img] ${file} -> ${outFile}`);
-                    (manifest[file] ||= {});
-                    (manifest[file][fmt.ext] ||= []).push({
-                        width: w,
-                        path: path.posix.join(
-                            path.relative(process.cwd(), outputDir).split(path.sep).join('/'),
-                            outFile
-                        )
-                    });
-                } catch (e) {
-                    console.error(`[img] fail ${file} (${w}px ${fmt.ext}): ${e.message}`);
-                }
+            // Resize only if original is wider than target
+            const resizeWidth = origWidth > TARGET_WIDTH ? TARGET_WIDTH : origWidth;
+
+            // Process and save
+            await sharp(inputPath)
+                .resize({ width: resizeWidth, withoutEnlargement: true })
+                .webp({ quality: QUALITY })
+                .toFile(outputPath);
+
+            // Delete original if it's a different file
+            if (inputPath !== outputPath) {
+                await fs.unlink(inputPath);
+                console.log(`[img] ✅ ${file} -> ${outputFile} (${resizeWidth}px, replaced original)`);
+            } else {
+                console.log(`[img] ✅ ${file} optimized in-place (${resizeWidth}px)`);
             }
+            
+            processed++;
+        } catch (e) {
+            console.error(`[img] ❌ Failed to process ${file}: ${e.message}`);
         }
-        // Sort each format list by width ascending
-        Object.values(manifest[file]).forEach(arr => arr.sort((a, b) => a.width - b.width));
     }
 
-    fsSync.mkdirSync('.cache', { recursive: true });
-    fsSync.writeFileSync('.cache/image-manifest.json', JSON.stringify(manifest, null, 2));
-    return manifest;
+    console.log(`[img] Done! Processed: ${processed}, Skipped: ${skipped}`);
+    
+    // Clean up manifest cache if it exists (no longer needed)
+    try {
+        const manifestPath = '.cache/image-manifest.json';
+        if (fsSync.existsSync(manifestPath)) {
+            fsSync.unlinkSync(manifestPath);
+        }
+    } catch (e) {
+        // Ignore cleanup errors
+    }
 }
