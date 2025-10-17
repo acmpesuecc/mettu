@@ -2,8 +2,10 @@
   "name": "mettu",
   "version": "0.7.0",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build"
+    "setup": "npm install && node scripts/prep-env.mjs",
+    "predev": "node scripts/prep-env.mjs",
+    "dev": "npm run predev && vite",
+    "build": "npm run predev && vite build"
   },
   "keywords": [],
   "author": "Andey Hemanth",
