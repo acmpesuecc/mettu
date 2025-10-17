@@ -6,11 +6,18 @@ import os
 
 def render_page(page_config, html_data, site_config, templates, all_posts=None, OUTPUT_DIR='.'):
     layout = page_config.get("layout")
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.getenv("TEMPLATE_DIR", "templates")))
+    try:
+        template = env.get_template(f'{layout}.html')
+    except jinja2.exceptions.TemplateNotFound:
+        print(f'Template {layout}.html not found. Skipping build')
+        return
     if layout not in templates:
         print("Error: Template not found. Skipping build.")
-        return
-
-    template = templates[layout]
+        return    
+    
+    
+    layout = page_config.get("layout")
 
 
     render_details = {"site": site_config, "page": page_config, "content": html_data}
