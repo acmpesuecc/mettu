@@ -30,6 +30,7 @@ const py_build_plugin = () => {
   if (!fs.existsSync(syntaxCssPath)) {
     console.log('Syntax CSS not found. Generating...');
     try {
+      fs.unlinkSync(syntaxCssPath)
       execSync(`pygmentize -S ${process.env.PYGMENTIZE_THEME} -f html > ${syntaxCssPath}`);
       console.log('Generated syntax.css');
     } catch (e) {
