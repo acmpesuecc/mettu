@@ -27,9 +27,6 @@ def process_images_in_html(html_content):
                 for width in generated_widths:
                     processed_filename = f"{filename_no_ext}-{width}w.webp"
                     processed_src = f"{processed_dir_web_path}/{processed_filename}"
-                    # For robust check, ensure file exists - comment out for speed, or adjust as needed
-                    # processed_file_path = os.path.join('dist', 'assets', 'images-processed', processed_filename)
-                    # if os.path.exists(processed_file_path):
                     srcset_parts.append(f"{processed_src} {width}w")
                 if srcset_parts:
                     img['srcset'] = ", ".join(srcset_parts)
@@ -60,6 +57,7 @@ def main():
         "post": env.get_template("post.html"),
         "tags": env.get_template("tags.html"),
     }
+
     if args.file:
         print(f"Change detected in {args.file}, proceeding to rebuild...")
         if not os.path.exists(args.file):
@@ -144,7 +142,7 @@ def main():
         tag_pages(templates["tags"], site_config, tags)
         sitemap_template = env.get_template("sitemap.xml.j2")
         sitemap_xml = sitemap_template.render(site=site_config, pages=sitemap_list)
-        with open(os.path.join(os.getenv("OUTPUT_DIR", "."), "sitemap.xml"), "w") as f:
+        with open(os.path.join(os.getenv("OUTPUT_DIR", "."), "sitemap.xml"), "w", encoding="utf-8") as f:
             f.write(sitemap_xml)
         print("Generated sitemap.xml")
 
