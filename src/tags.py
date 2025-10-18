@@ -18,6 +18,6 @@ def tag_pages(tag_template, site_config, tags={},OUTPUT_DIR='.'):
             page={"title": f"Tag: {tag_name}"},
         )
         output_path = os.path.join(tags_dir, f"{tag_name}.html")
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(tag_page_html)
         print(f"Generated tag page: tags/{tag_name}.html")

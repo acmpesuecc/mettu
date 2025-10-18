@@ -1,67 +1,83 @@
 import sharp from 'sharp';
-import fs from 'fs/promises';
-import fsSync from 'fs';
 import path from 'path';
+import fs from 'fs-extra'; // Using fs-extra for ensureDirSync
+import { fileURLToPath } from 'url';
 
+// --- Configuration ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const TARGET_WIDTHS = [320, 640, 960, 1280, 1920];
-const FORMATS = [
-    { ext: 'webp', to: img => img.webp({ quality: 70 }) },
-    { ext: 'avif', to: img => img.avif({ quality: 45 }) },
-    { ext: 'jpg', to: img => img.jpeg({ quality: 80, mozjpeg: true, progressive: true }) },
-];
+// Define the input and output directories relative to this script
+const inputDir = path.resolve(__dirname, '../assets/images'); // Adjusted path assuming script is in 'src'
+const outputDir = path.resolve(__dirname, '../assets/images-processed'); // Adjusted path
 
+// Define the desired widths for responsive images
+const widths = [400, 800, 1200];
+const webpQuality = 80; // Quality setting for WebP images (0-100)
 
-export async function processImages(inputDir, outputDir) {
-    await fs.mkdir(outputDir, { recursive: true });
-    const entries = await fs.readdir(inputDir, { withFileTypes: true });
-    const files = entries
-        .filter(e => e.isFile() && /\.(png|jpe?g|gif)$/i.test(e.name))
-        .map(e => e.name);
+// --- Main Processing Function ---
+export async function processImages(inDir, outDir) {
+  console.log(`[images] Starting preprocessing from ${inDir} to ${outDir}`);
 
-    const manifest = {}; // { originalFile: { format: [{ width, path }] } }
+  try {
+    // Ensure the output directory exists, create if it doesn't
+    await fs.ensureDir(outDir);
+    console.log(`[images] Output directory ensured: ${outDir}`);
+
+    const files = await fs.readdir(inDir);
+    console.log(`[images] Found ${files.length} items in input directory.`);
 
     for (const file of files) {
-        const inputPath = path.join(inputDir, file);   // FIX
-        let meta;
+      const inputFile = path.join(inDir, file);
+      const stats = await fs.stat(inputFile);
+
+      // Skip directories and non-image files if necessary (basic check)
+      if (stats.isDirectory() || !/\.(jpe?g|png|gif|tiff|webp|avif)$/i.test(file)) {
+        console.log(`[images] Skipping: ${file} (Not a processable image)`);
+        continue;
+      }
+
+      // Get filename without extension
+      const baseName = path.parse(file).name;
+      console.log(`[images] Processing: ${file}`);
+
+      const imagePipeline = sharp(inputFile);
+
+      // Generate different sizes
+      for (const width of widths) {
+        const outputFilename = `${baseName}-${width}w.webp`;
+        const outputFile = path.join(outDir, outputFilename);
+
         try {
-            meta = await sharp(inputPath).metadata();
-        } catch (e) {
-            console.error(`[img] metadata fail ${file}: ${e.message}`);
-            continue;
-        }
+          await imagePipeline
+            .clone() // Start fresh from the original for each size
+            .resize({ width: width }) // Resize to target width
+            .webp({ quality: webpQuality }) // Convert to WebP
+            .toFile(outputFile); // Save the file
 
-        const origWidth = meta.width || Math.max(...TARGET_WIDTHS);
-        const widths = [...new Set(
-            TARGET_WIDTHS.filter(w => w <= origWidth).concat([origWidth])
-        )].sort((a, b) => a - b);
-
-        const baseName = file.replace(/\.(png|jpe?g|gif)$/i, '');
-        for (const w of widths) {
-            for (const fmt of FORMATS) {
-                const outFile = `${baseName}-${w}.${fmt.ext}`;
-                const outPath = path.join(outputDir, outFile);
-                try {
-                    await fmt.to(sharp(inputPath).resize({ width: w })).toFile(outPath);
-                    console.log(`[img] ${file} -> ${outFile}`);
-                    (manifest[file] ||= {});
-                    (manifest[file][fmt.ext] ||= []).push({
-                        width: w,
-                        path: path.posix.join(
-                            path.relative(process.cwd(), outputDir).split(path.sep).join('/'),
-                            outFile
-                        )
-                    });
-                } catch (e) {
-                    console.error(`[img] fail ${file} (${w}px ${fmt.ext}): ${e.message}`);
-                }
-            }
+          console.log(`[images]   ✓ Generated: ${outputFilename}`);
+        } catch (resizeError) {
+          console.error(`[images]   ✗ Error generating ${width}w for ${file}:`, resizeError);
         }
-        // Sort each format list by width ascending
-        Object.values(manifest[file]).forEach(arr => arr.sort((a, b) => a.width - b.width));
+      }
     }
-
-    fsSync.mkdirSync('.cache', { recursive: true });
-    fsSync.writeFileSync('.cache/image-manifest.json', JSON.stringify(manifest, null, 2));
-    return manifest;
+    console.log('[images] Image preprocessing complete.');
+  } catch (error) {
+    console.error('[images] An error occurred during image processing setup:', error);
+    // Optionally re-throw or exit if this is critical for the build
+    // process.exit(1);
+  }
 }
+
+// --- Allow running directly (optional, for testing) ---
+// This part allows you to run `node src/image-preprocess.mjs` to test it.
+// It might conflict if vite.config.mjs also calls processImages directly on import.
+// Consider removing or commenting out this block if vite.config.mjs handles the initial call.
+/*
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  processImages(inputDir, outputDir).catch(e => {
+    console.error('[images] standalone processing failed', e);
+    process.exit(1);
+  });
+}
+*/
